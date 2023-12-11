@@ -80,8 +80,6 @@ class PasswordManager:
         encrypted_random_pass = self.encrypt(random_pass)
         # store it
         self.accounts[encrypted_account] = encrypted_pass
-        # update file
-        self.updateAccounts()
         print("Password added successfully")
     
     def retrieve(self, account):
@@ -101,7 +99,7 @@ class PasswordManager:
         key = input("Enter key (or press enter to generate new ): ")
         if key == "" or key == " ":
             key = Fernet.generate_key()
-            print("New key: (keep it safe) :", key.decode())
+            print("\nNew key: (keep it safe) :", key.decode())
         
         else:
             key = key.encode()
@@ -109,23 +107,28 @@ class PasswordManager:
         try:
             key = Fernet(key)
             self.key = key
+            return True
         except Exception:
-            print("Error! Wrong key")
+            print("\nError! Wrong key")
+        return False
 
-        def available_accounts(self):
-            pass
+    def available_accounts(self):
+        print("\nCurrent Accounts: ")
 
-        def features(self):
-            print("What to do : ")
-            print("""
-            1. add new account
-            2. delete an account
-            3. change key
-            0. exit
+    def features(self):
+        print("\nWhat to do : ")
+        print("""
+        1. add new account
+        2. delete an account
+        3. change ( or add new) key
+        0. exit
         """)
-            choice = input(">>>")
-            return choice
-            
+        choice = input(">>>")
+        return choice
+    
+    def update_accounts(self):
+        pass
+
 if __name__ == "__main__":
     manager = PasswordManager()
     while True:
@@ -139,16 +142,22 @@ if __name__ == "__main__":
 
         choice = manager.features()
 
-        if choice == 1:
-            pass
-        elif choice == 2:
-            account_name = input("account_name: ")
-            password = input("Password: ")
-            manager.add_password(account_name, password)
-        elif choice == 3:
-            account_name = input("account_name: ")
-            password = manager.get_pass(account_name)
-            print("password: ", password)
-        else:
+        if choice == "0":
             break
-        
+        elif choice == "1":
+            manager.add_account()
+        elif choice == "2":
+            manager.delete_account()
+        elif choice == "3":
+            print("""
+            Note: Changing key will not affect your old accounts.
+                  You can still access them with your old key.
+                  To remove them, login with old key.
+            """)
+            success = False
+            while not success:
+                success = manager.update_key()
+            print("Successfully added new key")
+        else:
+            print("Enter valid choice")
+        manager.update_accounts()
