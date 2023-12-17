@@ -8,38 +8,52 @@ When displaying password, it will first decrypt it and then display it.
 import json
 import random
 import string
-from cryptography.fernet import Fernet
+import os
 
-LOW = 10
-HIGH = 25
+LOW = 8
+HIGH = 15
 CHARACTERS = string.ascii_letters + string.digits + "!@#$%^&*()_+~//*"
 
 class PasswordManager:
     def __init__(self):
-        # to store all of accounts from file
+        
+        # fetch accounts from file and store it
         self.accounts = {}
+        def fetch_passwords():
+            try:
+                with open("passwords.json", "r") as f:
+                    # key and value will in str. We have to change encode / decode while using it.
+                    self.accounts = json.load(f)
+            except Exception as e:
+                print("Error! Unable to find passwords.json.\nCreating new file.")
+                with open("passwords.json", 'w') as f:
+                    json.dump({}, f)
+        fetch_passwords()
         # key will be used to encrypt and decrypt accounts and passwords.
         self.key = None
 
-        
-    def encrypt(self, text):
+    
+
+    def encrypt(self, text:str):
         """
             Encrypt any text with stored key
+            Return : Bytes or None
         """
         cipher_suite = Fernet(self.key)
-        encrypted_text = cipher_suite.encrypt(text.encode())
-        return encrypted_text
+        return cipher_suite.encrypt(text.encode()).decode()
 
-    def decrypt(self, encrypted_text):
+    def decrypt(self, encrypted_text:str):
         """
             Decrypt encrypted_text with stored key.
             Note: Decryption depends upon stored key.
+            return: None or bytes.
         """
         cipher_suite = Fernet(self.key)
-        decrypted_text = cipher_suite.decrypt(encrypted_text).decode()
-        return decrypted_text
+        return cipher_suite.decrypt(encrypted_text.encode()).decode()
+        
 
-    def gen_pass(self):
+    @staticmethod
+    def gen_pass():
         """
             Returned password string will be of arbitrary length 
             containing punctuations + alpha numeric character.
@@ -48,64 +62,74 @@ class PasswordManager:
         pass_length = random.randint(LOW, HIGH)
         random_pass = "".join(random.choice(CHARACTERS) for i in range(pass_length))
         return random_pass
-
-    def store_custom(self, account, password):
-        """
-            store password given by user.
-        """
-        # Encrypt account
-        encrypted_account = self.encrypt(account)
-        # Encrypt password with key
-        encrypted_pass = self.encrypt(password)
-        # Checking for encrypted account instead of normal account
-        if encrypted_account not in self.accounts:
-            self.accounts[encrypted_account] = encrypted_pass
-
-        # finally update json file
-        self.updateAccounts()
-        print("Password stored successfully")
-
-    def store_auto(self, account):
-        """
-            Store auto generate password signed by key.
-        """
-        # Encrypt Account
-        encrypted_account = self.encrypt(account)
-        if encrypted_account in self.account:
-            print("There is already a password for this account. \n try changing it if you want new.")
-            return
-        # generate random string of random length
-        random_pass = self.gen_pass()
-        # encrypt generated random password
-        encrypted_random_pass = self.encrypt(random_pass)
-        # store it
-        self.accounts[encrypted_account] = encrypted_pass
-        print("Password added successfully")
     
-    def retrieve(self, account):
+    
+    def add_account(self):
         """
-            return decrypted password if key is correct and account exists
-            else return None
+            First take account name and check if it already exits.
+            If it exists then return.
+            Else,take password or generate it.
+            encrypt password and store it. then return
+
+            Note: account will store in str. So we have to encode/decode it while using
         """
+        # return if account with same key is already present
+        account = input("account name: ")
+        
+        encrypted_account = self.encrypt(account)
+        if encrypted_account in self.accounts:
+            print("Account already availble. Delete it first")
+            return
+
+        password = input("password (blank to auto generate): ")
+        if password == " " or password == "":
+            password = PasswordManager.gen_pass()
+        
+        encrypted_password = self.encrypt(password)
+        self.accounts[encrypted_account] = encrypted_password
+        print("Password added successfully")
+
+    def delete_account(self):
+        """
+            Get account name, check key and delete account
+        """
+        account = input("account: ")
+        encrypted_account = self.encrypt(account)
+        
+        if encrypted_account in self.accounts:
+            del self.accounts[encrypted_account]
+        else:
+            print("Account not found!")
+
+    def get_password(self):
+        """
+            print req password else print account not availble
+        """
+        account = input("account name: ")
         # account is first encrypted and then used as index to store password.
         encrypted_account = self.encrypt(account)
         if encrypted_account not in self.accounts:
-            return None
-        #decrepting encrypted password and returning
-        return self.decrypt(self.accounts[encrypted_account])
+            print("Account Not Found!")
+        else:
+            #decrepting encrypted password before printing
+            print(self.decrypt(self.accounts[encrypted_account]))
 
     def update_key(self):
         """ this will update encryption key"""
-        key = input("Enter key (or press enter to generate new ): ")
+        key = input("Key (press enter to generate new ): ")
         if key == "" or key == " ":
+            # key will be encoded
             key = Fernet.generate_key()
             print("\nNew key: (keep it safe) :", key.decode())
         
         else:
+            # encode the user entered key.
             key = key.encode()
 
         try:
-            key = Fernet(key)
+            # check if current key is valid
+            check_key = Fernet(key)
+            #set key
             self.key = key
             return True
         except Exception:
@@ -114,20 +138,48 @@ class PasswordManager:
 
     def available_accounts(self):
         print("\nCurrent Accounts: ")
+        index = 0
+        for encrypted_account in  self.accounts.keys():
+            try:
+                account = self.decrypt(encrypted_account)
+                print(index, ". ", account)
+                index += 1
+            except Exception:
+                pass
+        
+        if index == 0:
+            print("None")
+        
 
-    def features(self):
+    @staticmethod
+    def features():
         print("\nWhat to do : ")
         print("""
         1. add new account
         2. delete an account
         3. change ( or add new) key
+        4. Get password
         0. exit
         """)
         choice = input(">>>")
         return choice
     
     def update_accounts(self):
-        pass
+        with open("passwords.json", 'w') as f:
+            json.dump(self.accounts, f)
+
+    def change_key(self):
+        print("""
+        Note: Changing key will not affect your old accounts.
+        You can still access them with your old key.
+        To remove them, login with old key.
+        """)
+        success = False
+        while not success:
+            success = manager.update_key()
+        print("Successfully added new key")
+
+
 
 if __name__ == "__main__":
     manager = PasswordManager()
@@ -137,11 +189,12 @@ if __name__ == "__main__":
             manager.update_key()
             continue
 
+        print("Current key: ", manager.key)
         # It will display only those accounts that are signed by given key
-        print(manager.available_accounts())
+        manager.available_accounts()
 
         choice = manager.features()
-
+        os.system("clear")
         if choice == "0":
             break
         elif choice == "1":
@@ -149,15 +202,9 @@ if __name__ == "__main__":
         elif choice == "2":
             manager.delete_account()
         elif choice == "3":
-            print("""
-            Note: Changing key will not affect your old accounts.
-                  You can still access them with your old key.
-                  To remove them, login with old key.
-            """)
-            success = False
-            while not success:
-                success = manager.update_key()
-            print("Successfully added new key")
+            manager.change_key()
+        elif choice == "4":
+            manager.get_password()
         else:
             print("Enter valid choice")
         manager.update_accounts()
