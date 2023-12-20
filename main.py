@@ -1,39 +1,23 @@
-"""
-Working:
-It will store account and it's password in json file. 
-Password will be encrypted with a parent key and account name.
-When displaying password, it will first decrypt it and then display it.
-"""
-
 import json
 import random
 import string
 import os
+from cryptography import Fernet
 
 LOW = 8
 HIGH = 15
 CHARACTERS = string.ascii_letters + string.digits + "!@#$%^&*()_+~//*"
 
+
+
 class PasswordManager:
     def __init__(self):
         
-        # fetch accounts from file and store it
         self.accounts = {}
-        def fetch_passwords():
-            try:
-                with open("passwords.json", "r") as f:
-                    # key and value will in str. We have to change encode / decode while using it.
-                    self.accounts = json.load(f)
-            except Exception as e:
-                print("Error! Unable to find passwords.json.\nCreating new file.")
-                with open("passwords.json", 'w') as f:
-                    json.dump({}, f)
-        fetch_passwords()
-        # key will be used to encrypt and decrypt accounts and passwords.
+        self.salt = None
         self.key = None
 
-    
-
+    #utilities
     def encrypt(self, text:str):
         """
             Encrypt any text with stored key
@@ -50,25 +34,75 @@ class PasswordManager:
         """
         cipher_suite = Fernet(self.key)
         return cipher_suite.decrypt(encrypted_text.encode()).decode()
+    
+    def update_salt(self):
+        self.salt = os.urandom(16)
+
+    
+    
+
+    #Credentials and files related functionalities
+
+    def derive_key(self, password):
+        "Derive key based on given salt value and entered password"
+        try:
+            kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=self.salt,
+            iterations=480000,
+            )
+            self.key = base64.urlsafe_b64encode(kdf.derive(password.encode()))
+    
+        except Exception as e:
+            print("Error! ", e)
+        
+    def get_master_password(self):
+        """Get password from user of generate new"""
+        master_password = input("Enter password (leave blank to generate new): ")
+        is_generated = False
+        if master_password == " " or master_password = "":
+            print("""
+            Note: Changing or adding new password will remove all store credentials.
+        """)
+            confirm = input("Enter yes(y/Y) or no(n/N) to confirm: ")
+            if confirm.lower() == "yes" or confirm.lower() == "y":
+                master_password = PasswordManager.generate_random_pass()
+                is_generated = True
+            else:
+                self.get_master_password()
+        return master_password, is_generated
         
 
-    @staticmethod
-    def gen_pass():
-        """
-            Returned password string will be of arbitrary length 
-            containing punctuations + alpha numeric character.
-        """
-        # password will be of arbitrary length
-        pass_length = random.randint(LOW, HIGH)
-        random_pass = "".join(random.choice(CHARACTERS) for i in range(pass_length))
-        return random_pass
-    
+    def set_accounts(self, encrypted_account):
+        try:
+            encrypted_account = 
+        except Exception as e:
+            pass
+
+    def set_keys(self):
+        """ Get salt and password, derive key based on it.
+            Set key, then check if password is correct. If password is correct. """
+        encrypted_account = None
+        if self.salt == None:
+            encrypted_account = self.fetch_accounts()
+
+        master_password, is_generated = self.get_master_password()
+        self.key = self.derive_key(master_password)
+
+        if encrypted_account not None:
+            if is_generated
+
+        
+
+
+
     
     def add_account(self):
         """
             First take account name and check if it already exits.
             If it exists then return.
-            Else,take password or generate it.
+            Else, take password or generate it.
             encrypt password and store it. then return
 
             Note: account will store in str. So we have to encode/decode it while using
@@ -114,27 +148,25 @@ class PasswordManager:
             #decrepting encrypted password before printing
             print(self.decrypt(self.accounts[encrypted_account]))
 
-    def update_key(self):
-        """ this will update encryption key"""
-        key = input("Key (press enter to generate new ): ")
-        if key == "" or key == " ":
-            # key will be encoded
-            key = Fernet.generate_key()
-            print("\nNew key: (keep it safe) :", key.decode())
-        
-        else:
-            # encode the user entered key.
-            key = key.encode()
-
+    def fetch_accounts(self):
+        """load encrypted account, set salt and return encrypted_account as bytes.
+        Else: set new salt value and set new password file and return None"""
         try:
-            # check if current key is valid
-            check_key = Fernet(key)
-            #set key
-            self.key = key
-            return True
-        except Exception:
-            print("\nError! Wrong key")
-        return False
+            encrypted_file = None
+            with open("passwords.txt", "rb") as f:
+                encrypted_file = f.read()
+            
+            #salt is stored as bytes
+            self.salt = encrypted_file[:16]
+            # encrypted accounts is in bytes
+            return encrypted_file[16:]
+
+        except Exception as E:
+            self.update_salt()
+            print("Error! Unable to find passwords.txt.\nCreating new file.")
+            with open("passwords.txt", 'w') as f:
+                f.write()
+
 
     def available_accounts(self):
         print("\nCurrent Accounts: ")
@@ -168,17 +200,6 @@ class PasswordManager:
         with open("passwords.json", 'w') as f:
             json.dump(self.accounts, f)
 
-    def change_key(self):
-        print("""
-        Note: Changing key will not affect your old accounts.
-        You can still access them with your old key.
-        To remove them, login with old key.
-        """)
-        success = False
-        while not success:
-            success = manager.update_key()
-        print("Successfully added new key")
-
 
 
 if __name__ == "__main__":
@@ -186,11 +207,9 @@ if __name__ == "__main__":
     while True:
         # check if user is logged in
         if manager.key == None:
-            manager.update_key()
+            manager.set_keys()
             continue
 
-        print("Current key: ", manager.key)
-        # It will display only those accounts that are signed by given key
         manager.available_accounts()
 
         choice = manager.features()
