@@ -1,10 +1,13 @@
+import re
 import json
 import random
 import string
 import os
-from cryptography import Fernet
+from cryptography.fernet import Fernet
 
-# Passswords will work only when we have some data stored.
+LOW = 8
+HIGH = 15
+CHARACTERS = string.ascii_letters + string.digits + "@#$%^&*"
 
 class PasswordManager:
 
@@ -16,7 +19,7 @@ class PasswordManager:
         # data type: bytes
         self.salt = None
 
-    def encrypt(self, text:str, key=None):
+    def encrypt(self, text:str, key:bytes=None)->str:
         if key == None:
             key = self.key
         
@@ -24,7 +27,7 @@ class PasswordManager:
         # return data type: string
         return cipher_suite.encrypt(text.encode()).decode()
     
-    def decrypt(self, encrypted_text:str, key = None):
+    def decrypt(self, encrypted_text:str, key:bytes = None)->str:
         if key== None:
             key = self.key
 
@@ -32,7 +35,7 @@ class PasswordManager:
         # return data type: str
         return cipher_suite.decrypt(encrypted_text.encode()).decode()
 
-    def derive_key(self, password):
+    def derive_key(self, password:str):
         "Derive key based on given salt value and entered password"
         try:
             kdf = PBKDF2HMAC(
@@ -47,10 +50,10 @@ class PasswordManager:
             print("Error! ", e)
 
     @staticmethod
-    def generate_random_pass():
+    def generate_random_pass()->str:
         """
             Returned password string will be of arbitrary length 
-            containing punctuations + alpha numeric character.
+            containing symbols + alpha numeric character.
         """
         # password will be of arbitrary length
         pass_length = random.randint(LOW, HIGH)
@@ -58,37 +61,55 @@ class PasswordManager:
         return random_pass
     
     @staticmethod
-    def password_strenght(password):
+    def password_strength(password:str)->bool:
         """ check password strength """
-        pass
 
-    def signup(self, message = None):
-        """set key based on master password"""
+        has_digit = bool(re.search(r'\d', password))
+        has_uppercase = bool(re.search(r'[A-Z]', password))
+        has_lowercase = bool(re.search(r'[a-z]', password))
+        has_symbol = bool(re.search(r'[@#$%^&*]', password))
+        
+        return len(password) > 7 and has_digit and has_uppercase and has_lowercase and has_symbol
+         
+
+    def signup(self, message:str = None):
+        """signup user and set key based on given password"""
 
         # print message
-        if message not None:
+        if message:
             print(message)
 
+        # passwords validity credentials
+        password_validity = """Password should be at least of:
+                            8 characters.
+                            1 number.
+                            1 uppercase
+                            1 lowercase
+                            1 symbol(@#$%^&*())"""
+        print(password_validity)
         # set password
         master_password = input("Password (or leave blank to auto-generate): ")
 
-        if master_password == " " or master_password = "":
+        if master_password == " " or master_password == "":
+            # a randome password with arbitrary length
             master_password = PasswordManager.generate_random_pass()
-            print("your password is: ", master_password)
+            print("your password is(please store it somewhere ): ", master_password)
+
         else:
             # checks for entered password
             confirm_master_password = input("Confirm password: ")
             if confirm_master != master_password:
                 return self.signup(message = "Error! passwords are not matching")
             if not PasswordManager.password_strenght(master_password):
-                return self.signup(message = "Weak password. Enter at least 8 digit of alpha numeric password")
+                password_checks = "Password should be of 8 digit "
+                return self.signup(message = "Weak password. Enter again")
 
         # generate key
         self.key = self.derive_key(master_password)
         print("password set successfully")
 
 
-    def verify_password(self, master_password, encrypted_accounts:str):
+    def verify_password(self, master_password:str, encrypted_accounts:str):
         """ verify password by generating correct key. 
         return key and accounts as string """
         
@@ -103,10 +124,10 @@ class PasswordManager:
         except Exception as E:
             return None, None
 
-    def login(self, message = None, encrypted_accounts:str):
+    def login(self, encrypted_accounts:str, message:str=None):
         """take password, verify it and login user. Else re-login"""
         # print message 
-        if message not None:
+        if message:
             print(message)
         
         # get password
@@ -120,11 +141,33 @@ class PasswordManager:
             print("Login successful")
         return accounts
 
+    def update_salt(self)->bytes:
+        self.salt = os.urandom(16)
+        return self.salt
+
+    def fetch_accounts(self)->str:
+        """load encrypted account, set salt and return encrypted_account as string.
+        Else: set new salt value and set new password file and return None"""
+        try:
+            encrypted_file = None
+            with open("passwords.txt", "rb") as f:
+                encrypted_file = f.read()
+            
+            #salt is stored as bytes
+            self.salt = encrypted_file[:16]
+            # encrypted accounts is in string
+            return encrypted_file[16:].decode()
+
+        except Exception as E:
+            self.update_salt()
+            print("Cann't find any stored password. Setting new account.")
+            with open("passwords.txt", 'w') as f:
+                f.write()
 
     def set_keys_accounts(self):
         """it will setup necessary credentials and load saved and ecrypted data from file"""
         #load saved accounts and salt
-        encrypted_accounts = self.fetch_accounts().decode()
+        encrypted_accounts = self.fetch_accounts()
         accounts = '{}'
 
         # setup key and decrypted account
@@ -137,9 +180,11 @@ class PasswordManager:
         self.accounts = json.loads(accounts)
 
 if __name__ == "__main__":
+#Note: passwords will only work when we have any data stored.
     manager = PasswordManager()
 
     while True:
+        # Don't go further if user is not login.
         if manager.key == None:
             manager.set_keys_accounts()
             continue
